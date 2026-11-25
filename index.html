@@ -63,6 +63,15 @@ label{font-size:.8rem;color:var(--mut);margin-left:6px}
 .tok .ava{width:100%;height:100%}
 body.out header,body.out nav,body.out main{display:none}body:not(.out) #gate{display:none}
 .gate{max-width:520px;margin:0 auto;padding:24px 16px}
+.gate.center{display:flex;align-items:center;justify-content:center;min-height:85vh;max-width:none}
+.auth{width:100%;max-width:400px;padding:28px 24px;margin:0}
+.logo{width:68px;height:68px;border-radius:50%;background:var(--soft);color:var(--acc);display:flex;align-items:center;justify-content:center;margin:0 auto 12px}
+.auth h2{text-align:center;margin:0 0 4px;font-weight:650}
+.seg{display:flex;background:var(--tint);border-radius:999px;padding:4px;margin-bottom:12px}
+.seg button{flex:1;justify-content:center;background:none}.seg button.on{background:var(--card);color:var(--acc);box-shadow:0 2px 8px rgba(0,0,0,.12)}
+.err{color:#d9534f;font-size:.85rem;min-height:1.3em;margin:0 6px 8px}
+.wide{width:100%;justify-content:center;padding:13px}
+a{color:var(--acc)}
 </style>
 </head>
 <body class="out">
@@ -257,34 +266,58 @@ function mkdb(lid){
 }
 let role='player',lobby=null,session=null,profile=null,LB=[];
 const gate=document.getElementById('gate');
-const em=l=>l+'@dnd-game.app';
+const em=l=>'dnd_'+l+'@gmail.com';
 const setErr=t=>{const e=document.getElementById('g_err');if(e)e.textContent=t};
 const ERR='color:#d9534f;margin:0 6px 8px';
+let mode='in';
+const friendly=m=>/already|registered/i.test(m)?'Такой логин уже занят':/invalid login/i.test(m)?'Неверный логин или пароль':/signups? .*disabled/i.test(m)?'Регистрация отключена в настройках Supabase':/rate limit|too many/i.test(m)?'Слишком много попыток, подождите минуту':/schema cache|does not exist/i.test(m)?'В Supabase не выполнен файл schema.sql':m;
 function showAuth(){
-  document.body.classList.add('out');
-  gate.innerHTML=`<div class="card"><h3>${ico('sword',20)} Подземелья и Драконы</h3><div class="row" style="margin-bottom:10px"><button data-role="player" class="${role==='player'?'pri':''}">${ico('user',18)} Игрок</button><button data-role="master" class="${role==='master'?'pri':''}">${ico('crown',18)} Мастер</button></div>
-  <label>Логин (латиница, цифры)</label><input id="g_login" autocomplete="username" autocapitalize="none"><label>Пароль (от 6 символов)</label><input id="g_pass" type="password" autocomplete="current-password">
-  <div id="g_err" class="mut" style="${ERR}"></div><div class="row"><button class="pri" id="g_in">Войти</button><button id="g_reg">Регистрация</button></div></div>`;
-  if(SUPABASE_URL.includes('YOUR-'))setErr('Сначала вставьте URL и ключ Supabase в начале файла.');
-  gate.querySelectorAll('[data-role]').forEach(b=>b.onclick=()=>{role=b.dataset.role;gate.querySelectorAll('[data-role]').forEach(x=>x.classList.toggle('pri',x===b))});
-  const cred=()=>{const l=document.getElementById('g_login').value.trim().toLowerCase(),p=document.getElementById('g_pass').value;
-    if(!/^[a-z0-9_.-]{3,30}$/.test(l)){setErr('Логин: 3–30 символов, латиница, цифры, _ . -');return null}
-    if(p.length<6){setErr('Пароль: минимум 6 символов');return null}return{l,p}};
-  document.getElementById('g_in').onclick=async()=>{const c=cred();if(!c)return;setErr('');
-    const{data,error}=await sb.auth.signInWithPassword({email:em(c.l),password:c.p});if(error)return setErr('Неверный логин или пароль');
-    session=data.session;const{data:pr}=await sb.from('profiles').select('*').eq('id',data.user.id).maybeSingle();
-    if(!pr)return setErr('Профиль не найден');
-    if(pr.role!==role){await sb.auth.signOut();return setErr(pr.role==='master'?'Это аккаунт мастера — выберите «Мастер»':'Это аккаунт игрока — выберите «Игрок»')}
-    profile=pr;showLobbies()};
-  document.getElementById('g_reg').onclick=async()=>{const c=cred();if(!c)return;setErr('');
-    const{data,error}=await sb.auth.signUp({email:em(c.l),password:c.p});
-    if(error)return setErr(/already|registered/i.test(error.message)?'Такой логин уже занят':error.message);
-    if(!data.session)return setErr('Отключите подтверждение email в настройках Supabase (Auth → Providers → Email)');
-    session=data.session;const{error:e2}=await sb.from('profiles').insert({id:data.user.id,username:c.l,role});if(e2)return setErr(e2.message);
-    profile={id:data.user.id,username:c.l,role};showLobbies()};
+  document.body.classList.add('out');gate.className='gate center';
+  const up=mode==='up';
+  gate.innerHTML=`<div class="card auth"><div class="logo">${ico('sword',34)}</div><h2>${up?'Создать аккаунт':'Добро пожаловать'}</h2>
+  <div class="mut" style="text-align:center;margin-bottom:14px">${up?'Придумайте логин и пароль':'Войдите, чтобы продолжить игру'}</div>
+  <div class="seg"><button data-role="player" class="${role==='player'?'on':''}">${ico('user',18)} Игрок</button><button data-role="master" class="${role==='master'?'on':''}">${ico('crown',18)} Мастер</button></div>
+  <label>Логин</label><input id="g_login" autocomplete="username" autocapitalize="none" placeholder="например, dragon_77">
+  <label>Пароль</label><input id="g_pass" type="password" autocomplete="${up?'new-password':'current-password'}" placeholder="минимум 6 символов">
+  <div id="g_err" class="err"></div><button class="pri wide" id="g_go">${up?'Зарегистрироваться':'Войти'}</button>
+  <div class="mut" style="text-align:center;margin-top:12px">${up?'Уже есть аккаунт?':'Нет аккаунта?'} <a href="#" id="g_sw">${up?'Войти':'Регистрация'}</a></div></div>`;
+  if(SUPABASE_URL.includes('YOUR-'))setErr('Сначала вставьте URL и ключ Supabase в index.html');
+  gate.querySelectorAll('[data-role]').forEach(b=>b.onclick=()=>{role=b.dataset.role;gate.querySelectorAll('[data-role]').forEach(x=>x.classList.toggle('on',x===b))});
+  document.getElementById('g_sw').onclick=e=>{e.preventDefault();mode=up?'in':'up';showAuth()};
+  const go=document.getElementById('g_go');
+  const run=async()=>{
+    const l=document.getElementById('g_login').value.trim().toLowerCase(),p=document.getElementById('g_pass').value;
+    if(!/^[a-z0-9_]{3,30}$/.test(l))return setErr('Логин: 3–30 символов, только латиница, цифры и _');
+    if(p.length<6)return setErr('Пароль: минимум 6 символов');
+    setErr('');go.disabled=true;go.textContent='Подождите…';
+    try{
+      if(up){
+        const{data,error}=await sb.auth.signUp({email:em(l),password:p});
+        if(error)throw error;
+        if(data.user&&data.user.identities&&!data.user.identities.length)throw new Error('already registered');
+        if(!data.session)throw new Error('Отключите «Confirm email» в Supabase: Authentication → Sign In / Providers → Email');
+        session=data.session;
+        const{error:e2}=await sb.from('profiles').insert({id:data.user.id,username:l,role});if(e2)throw e2;
+        profile={id:data.user.id,username:l,role};
+      }else{
+        const{data,error}=await sb.auth.signInWithPassword({email:em(l),password:p});
+        if(error)throw error;session=data.session;
+        let{data:pr}=await sb.from('profiles').select('*').eq('id',data.user.id).maybeSingle();
+        if(!pr){const{error:e3}=await sb.from('profiles').insert({id:data.user.id,username:l,role});if(e3)throw e3;pr={id:data.user.id,username:l,role}}
+        if(pr.role!==role){await sb.auth.signOut();throw new Error(pr.role==='master'?'Это аккаунт мастера — выберите «Мастер»':'Это аккаунт игрока — выберите «Игрок»')}
+        profile=pr;
+      }
+      showLobbies();
+    }catch(e){
+      const m=String(e&&e.message||e);
+      setErr(/failed to fetch|network/i.test(m)?'Нет связи с Supabase. Проверьте URL и ключ в index.html':friendly(m));
+      go.disabled=false;go.textContent=up?'Зарегистрироваться':'Войти';
+    }
+  };
+  go.onclick=run;gate.querySelectorAll('input').forEach(i=>i.onkeydown=e=>{if(e.key==='Enter')run()});
 }
 async function showLobbies(){
-  document.body.classList.add('out');if(db){db.stop();db=null}
+  document.body.classList.add('out');gate.className='gate';if(db){db.stop();db=null}
   const{data}=await sb.from('lobbies').select('*').order('created_at',{ascending:false});LB=data||[];
   const M=role==='master';
   gate.innerHTML=`<div class="card"><div class="row" style="justify-content:space-between"><h3 style="margin:0">${ico(M?'crown':'user',20)} ${esc(profile.username)}</h3><button id="g_out">Выйти</button></div></div>
