@@ -230,10 +230,7 @@ function bind(){
   const ns=document.getElementById('savenote');if(ns)ns.onclick=async()=>{await db.doc('notes/'+uid).set({text:v('notes')});ns.textContent='Сохранено'};
   const sy=document.getElementById('sys');if(sy)sy.onchange=async()=>{await db.doc('game/settings').set({system:sy.value})};
   const f=document.getElementById('img');
-  if(f)f.onchange=()=>{const file=f.files[0];if(!file)return;const im=new Image();im.onload=()=>{
-    const s=Math.min(1,240/Math.max(im.width,im.height)),cv=document.createElement('canvas');cv.width=im.width*s;cv.height=im.height*s;
-    cv.getContext('2d').drawImage(im,0,0,cv.width,cv.height);pendingImg=cv.toDataURL('image/jpeg',.8);document.getElementById('prev').src=pendingImg};
-    im.src=URL.createObjectURL(file)};
+  if(f)f.onchange=()=>{const file=f.files[0];if(!file)return;shrink(file,400,u=>{pendingImg=u;document.getElementById('prev').src=u},.92,120000,true)};
 }
 function pfFields(c){const p=c.pf||{};const f=(id,l,v)=>`<div style="width:76px"><label>${l}</label><input type="number" id="${id}" value="${v||0}"></div>`;
   return `<div class="row" style="margin-top:8px">${f('c_ac','КБ',p.ac||10)}${f('c_fo','Стойк.',p.fo)}${f('c_re','Реакц.',p.re)}${f('c_wi','Воля',p.wi)}${f('c_pe','Воспр.',p.pe)}${f('c_hr','Очки героя',p.hr===undefined?1:p.hr)}</div><label>Состояния</label><input id="c_cond" value="${esc(p.cond)}" placeholder="Испуган 1, Ослаблен 2…">`}
@@ -260,7 +257,7 @@ function vMap(){
   if(isDM)h+=`<label>Загрузить карту</label><input type="file" id="mapf" accept="image/*"><label>Фишка героя</label><select id="m_hero">${S.chars.map(c=>`<option value="${c.id}">${esc(c.name)}</option>`).join('')}</select><div class="mut">Выберите героя и коснитесь карты — фишка встанет на это место.</div>`;
   return h+'</div>'}
 function vNotes(){return `<div class="card"><h3>${ico('note',18)} Заметки мастера</h3><div class="mut">Видны только вам</div><textarea id="notes" style="min-height:280px">${esc(drafts.notes||'')}</textarea><button class="pri" id="savenote">${ico('check',18)} Сохранить</button></div>`}
-function shrink(file,max,cb){const im=new Image();im.onload=()=>{let s=Math.min(1,max/Math.max(im.width,im.height)),q=.7,u;const cv=document.createElement('canvas');for(let i=0;i<8;i++){cv.width=im.width*s;cv.height=im.height*s;cv.getContext('2d').drawImage(im,0,0,cv.width,cv.height);u=cv.toDataURL('image/jpeg',q);if(u.length<220000)break;s*=.8;q=Math.max(.45,q-.05)}cb(u)};im.src=URL.createObjectURL(file)}
+function shrink(file,max,cb,q0=.7,lim=220000,sq=false){const im=new Image();im.onload=()=>{let w=im.width,h=im.height,sx=0,sy=0;if(sq){const m=Math.min(w,h);sx=(w-m)/2;sy=(h-m)/2;w=h=m}let k=Math.min(1,max/Math.max(w,h)),q=q0,u;const cv=document.createElement('canvas'),x=cv.getContext('2d');for(let i=0;i<8;i++){cv.width=Math.round(w*k);cv.height=Math.round(h*k);x.imageSmoothingEnabled=true;x.imageSmoothingQuality='high';x.drawImage(im,sx,sy,w,h,0,0,cv.width,cv.height);u=cv.toDataURL('image/jpeg',q);if(u.length<lim)break;k*=.85;q=Math.max(.6,q-.04)}cb(u)};im.src=URL.createObjectURL(file)}
 const mapDocs=s=>s.docs.map(d=>({id:d.id,...d.data()}));
 function mkdb(lid){
   const C=new Map(),L=new Set();let ch;
@@ -306,7 +303,7 @@ async function showCabinet(){
   <div class="bar"><i style="width:${Math.round(t.seconds/max*100)}%"></i></div><button class="pri" data-open="${l.id}">${ico('next',18)} Войти</button></div>`).join('')||'<div class="card mut">Приключений пока нет — загляните в лобби!</div>'}`;
   document.getElementById('c_back').onclick=showLobbies;
   const bad=()=>setErr('Не сохранилось: выполните migration_cabinet.sql в Supabase');
-  document.getElementById('c_ava').onchange=e=>{const f=e.target.files[0];if(f)shrink(f,160,async u=>{const{error}=await sb.from('profiles').update({avatar:u}).eq('id',me_);if(error)return bad();profile.avatar=u;showCabinet()})};
+  document.getElementById('c_ava').onchange=e=>{const f=e.target.files[0];if(f)shrink(f,360,async u=>{const{error}=await sb.from('profiles').update({avatar:u}).eq('id',me_);if(error)return bad();profile.avatar=u;showCabinet()},.92,150000,true)};
   document.getElementById('c_save').onclick=async()=>{const n=v('c_name');const{error}=await sb.from('profiles').update({display_name:n||null}).eq('id',me_);if(error)return bad();profile.display_name=n||null;showCabinet()};
   gate.querySelectorAll('[data-open]').forEach(b=>b.onclick=()=>startGame(Ls.find(l=>l.id===b.dataset.open)));
 }
@@ -373,7 +370,7 @@ async function showLobbies(){
   document.getElementById('g_cab').onclick=showCabinet;
   document.getElementById('g_out').onclick=async()=>{await sb.auth.signOut();session=profile=null;showAuth()};
   document.getElementById('l_go').onclick=async()=>{setErr('');
-    if(M){const n=v('l_name');if(!n)return;const{data:nl,error}=await sb.from('lobbies').insert({name:n}).select().single();if(error)return setErr(error.message);await sb.from('docs').upsert({lobby_id:nl.id,path:'game/settings',data:{system:document.getElementById('l_sys').value}})}
+    if(M){const n=v('l_name');if(!n)return;const nid=crypto.randomUUID();const{error}=await sb.from('lobbies').insert({id:nid,name:n});if(error)return setErr(error.message);await sb.from('docs').upsert({lobby_id:nid,path:'game/settings',data:{system:document.getElementById('l_sys').value}})}
     else{const c=v('l_code').toUpperCase();if(!c)return;const{error}=await sb.rpc('join_lobby',{c});if(error)return setErr('Лобби с таким кодом не найдено')}
     showLobbies()};
   gate.querySelectorAll('[data-open]').forEach(b=>b.onclick=()=>startGame(LB.find(l=>l.id===b.dataset.open)));
