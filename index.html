@@ -75,6 +75,19 @@ a{color:var(--acc);font-weight:800}
 .tile{border:3px solid var(--ink);border-radius:16px;padding:10px 4px;text-align:center;background:var(--tint);font-size:.75rem;color:var(--mut)}
 .tile b{display:block;font-size:1.25rem;color:var(--ink)}.tile:nth-child(odd){transform:rotate(-1.2deg)}.tile:nth-child(even){transform:rotate(1.2deg)}
 .avwrap{position:relative;cursor:pointer;display:block;margin:0}
+.stage{position:relative;border:3px solid var(--ink);border-radius:22px;overflow:hidden;background:#17132a;min-height:min(78vh,580px);margin-bottom:16px;box-shadow:var(--sh)}
+.stage .mapbox{border:0;border-radius:0;margin:0}
+.stage .nomap{padding:28px;text-align:center;color:#cfc6e6}
+.ov{position:absolute;left:0;right:0;bottom:0;padding:56px 14px 14px;background:linear-gradient(to top,rgba(10,8,22,.85),rgba(10,8,22,.5) 62%,transparent);color:#fff;text-shadow:0 1px 3px rgba(0,0,0,.7)}
+.ov h3{color:#fff}
+.ov label,.ov .mut{color:#e7dfff}
+.ov textarea,.ov input{background:rgba(255,255,255,.1);color:#fff;border:2px solid rgba(255,255,255,.35);-webkit-backdrop-filter:blur(3px);backdrop-filter:blur(3px);margin:4px 0 8px;box-shadow:none}
+.ov textarea::placeholder,.ov input::placeholder{color:rgba(255,255,255,.65)}
+.ov textarea{min-height:80px}
+.ov .reply{background:rgba(255,255,255,.14);border-color:rgba(255,255,255,.4)}
+.gl{position:absolute;inset:0;pointer-events:none;background-image:linear-gradient(rgba(255,255,255,.3) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.3) 1px,transparent 1px)}
+#toast{position:fixed;left:50%;top:calc(16px + env(safe-area-inset-top,0px));transform:translate(-50%,-20px);background:var(--ink);color:var(--card);padding:10px 18px;border-radius:14px;border:3px solid var(--acc);z-index:50;opacity:0;pointer-events:none;transition:.2s;max-width:90vw;text-align:center;font-weight:800}
+#toast.show{opacity:1;transform:translate(-50%,0)}
 </style>
 </head>
 <body class="out">
@@ -129,9 +142,11 @@ function render(){
   $('#nav').innerHTML=tabs.map(t=>`<button data-t="${t[0]}" class="${tab===t[0]?'on':''}">${ico(t[1],22)}<span>${t[2]}</span></button>`).join('');
   $('#nav').querySelectorAll('button').forEach(b=>b.onclick=()=>{tab=b.dataset.t;render()});
   const views={story:vStory,act:vAct,dm:vDM,hero:vHero,map:vMap,notes:vNotes,party:vParty,items:vItems};
+  const ae=document.activeElement,fid=ae&&ae.id,ss=ae&&ae.selectionStart,se=ae&&ae.selectionEnd;
   $('#app').innerHTML=banner()+views[tab]();
   for(const k in drafts){const e=document.getElementById(k);if(e&&e.type!=='file')e.value=drafts[k]}
   bind();
+  if(fid){const e=document.getElementById(fid);if(e){e.focus();try{e.setSelectionRange(ss,se)}catch(_){}}}
 }
 function banner(){
   const w=waiting(),n=S.chars.length;
@@ -149,14 +164,15 @@ function vStory0(){
 function vAct(){
   if(!me())return '<div class="card">Сначала создайте героя во вкладке «🧙 Герой».</div>';
   const a=myAct();
-  let h='';
+  let h='',inner;
   if(a){
-    h+=`<div class="card"><h3>Ваше действие в раунде ${round()}</h3><div class="txt">${esc(a.text)}</div>${a.reply?`<div class="reply"><b>Мастер:</b><div class="txt">${esc(a.reply)}</div></div>`:'<div class="mut">Мастер ещё не ответил. Ждём остальных…</div>'}</div>`;
+    inner=`<h3 style="margin:0 0 4px">Ваше действие · раунд ${round()}</h3><div class="txt">${esc(a.text)}</div>${a.reply?`<div class="reply"><b>Мастер:</b><div class="txt">${esc(a.reply)}</div></div>`:'<div class="mut">Мастер ещё не ответил. Ждём остальных…</div>'}`;
   }else{
-    h+=`<div class="card"><h3>Что делает ${esc(me().name)}?</h3><label>Опишите действие (без ограничения по времени)</label>
+    inner=`<div class="mut" style="margin:0 0 6px">${ico('map',14)} ${MV().moveLock?'Движение заблокировано мастером':movedNow(uid)?'Перемещение потрачено: −1 действие, до нового раунда фишка стоит':'Перемещение стоит 1 действие и доступно раз за раунд: коснитесь карты или перетащите фишку'+(MV().grid>0?' (до '+(MV().speed||6)+' клеток)':'')}</div><label>Что делает ${esc(me().name)}? Без ограничения по времени</label>
     ${PF()?pfActs():`<textarea id="act_t" placeholder="Я осторожно открываю дверь и…"></textarea>`}
-    <div class="row">${PF()?'<input id="act_b" type="number" placeholder="Бонус" style="width:90px;margin:0">':''}<button id="roll">${ico("dice",18)} d20</button><button class="pri" id="send">${ico("send",18)} Отправить мастеру</button></div></div>`;
+    <div class="row">${PF()?'<input id="act_b" type="number" placeholder="Бонус" style="width:90px;margin:0">':''}<button id="roll">${ico("dice",18)} d20</button><button class="pri" id="send">${ico("send",18)} Отправить мастеру</button></div>`;
   }
+  h+=stage(inner);
   h+='<div class="card"><h3>Кто сходил</h3>'+S.chars.map(c=>`<span class="chip ${actsNow().some(x=>x.uid===c.id)?'ok':''}">${actsNow().some(x=>x.uid===c.id)?ico('check',14):ico('clock',14)} ${esc(c.name)}</span>`).join('')+'</div>';
   const prev=S.acts.filter(x=>x.uid===uid&&x.round<round()).sort((a,b)=>b.round-a.round).slice(0,5);
   if(prev.length)h+='<div class="card"><h3>Прошлые ходы</h3>'+prev.map(p=>`<div class="mut">Раунд ${p.round}</div><div class="txt">${esc(p.text)}</div>${p.reply?`<div class="reply txt">${esc(p.reply)}</div>`:''}<hr>`).join('')+'</div>';
@@ -205,7 +221,7 @@ function vItems(){
 function bind(){
   const B=(id,f)=>{const e=document.getElementById(id);if(e)e.onclick=f};
   B('roll',()=>{const r=1+Math.floor(Math.random()*20);if(PF()){const b=+v('act_b')||0,e=document.getElementById('act_roll');e.value='d20 ('+r+')'+(b?(b>0?' +':' ')+b:'')+' = '+(r+b)+(r===20?' · натуральная 20':r===1?' · натуральная 1':'');drafts.act_roll=e.value;return}const e=$('#act_t');e.value=(e.value+(e.value?'\n':'')+`🎲 d20: ${r}`);drafts.act_t=e.value});
-  B('send',async()=>{const t=PF()?pfText():v('act_t');if(!t)return;
+  B('send',async()=>{const t=PF()?pfText():[v('act_t'),movedNow(uid)?'👣 Перемещение (потрачено 1 действие)':''].filter(Boolean).join('\n');if(!t)return;
     await db.doc('actions/'+round()+'_'+uid).set({round:round(),uid,name:me().name,text:t,reply:'',ts:Date.now()});['act_t','a1','a2','a3','a_r','act_roll'].forEach(clr)});
   B('next',async()=>{await db.doc('game/state').set({round:round()+1})});
   B('post',async()=>{const t=v('st_text');if(!t)return;await db.collection('story').add({title:v('st_title'),text:t,round:round(),ts:Date.now()});clr('st_text');clr('st_title');tab='story';render()});
@@ -225,20 +241,44 @@ function bind(){
   const sc=document.getElementById('d_sec');if(sc)sc.onchange=()=>{secret=sc.checked};
   document.querySelectorAll('[data-die]').forEach(b=>b.onclick=async()=>{const n=+b.dataset.die,c=Math.max(1,Math.min(20,+v('d_cnt')||1)),m=+v('d_mod')||0;const r=Array.from({length:c},()=>1+Math.floor(Math.random()*n));const total=r.reduce((a,b)=>a+b,0)+m;const lab=c+'d'+n+(m?(m>0?'+':'')+m:'');let dg='';const dc=+v('d_dc');if(PF()&&dc&&c===1&&n===20){let k=total>=dc+10?3:total>=dc?2:total>dc-10?1:0;if(r[0]===20)k=Math.min(3,k+1);if(r[0]===1)k=Math.max(0,k-1);dg=' → '+['крит. провал','провал','успех','крит. успех'][k]}lastRoll={total,txt:lab+' · ['+r.join(', ')+']'+dg+(secret?' · скрыто':'')};if(!secret)await db.collection('rolls').add({txt:lab+dg,total,ts:Date.now()});render()});
   document.querySelectorAll('[data-xp]').forEach(b=>b.onclick=async()=>{const a=+v('x_amt');if(!a)return;const t=v('x_hero')==='all'?S.chars:S.chars.filter(c=>c.id===v('x_hero'));for(const c of t)await db.doc('characters/'+c.id).update({xp:Math.max(0,(c.xp||0)+a)});clr('x_amt');b.textContent='Начислено'});
-  const mb=document.getElementById('mapbox');if(mb&&isDM)mb.onclick=async e=>{const hid=v('m_hero');if(!hid)return;const r=mb.getBoundingClientRect();const x=Math.round((e.clientX-r.left)/r.width*1000)/10,y=Math.round((e.clientY-r.top)/r.height*1000)/10;await db.doc('game/tokens').set({t:{...(S.tokens.t||{}),[hid]:{x,y}}})};
+  const sv=()=>db.doc('game/settings').set({...S.settings,moveLock:document.getElementById('mv_lock').checked,grid:+v('mv_grid')||0,speed:+v('mv_sp')||6});
+  const ml=document.getElementById('mv_lock');if(ml)ml.onchange=sv;
+  const ms=document.getElementById('mv_save');if(ms)ms.onclick=async()=>{await sv();ms.textContent='Сохранено'};
+  document.querySelectorAll('.mapbox').forEach(mb=>{
+    const rc=()=>mb.getBoundingClientRect();
+    const gl=mb.querySelector('.gl');if(gl){const c=rc().width/gl.dataset.g;gl.style.backgroundSize=c+'px '+c+'px'}
+    const P=e=>{const r=rc(),c=n=>Math.max(0,Math.min(100,Math.round(n*10)/10));return{x:c((e.clientX-r.left)/r.width*100),y:c((e.clientY-r.top)/r.height*100)}};
+    const dist=(a,b)=>{const r=rc(),g=MV().grid;return Math.hypot((a.x-b.x)/100*g,(a.y-b.y)/100*g*(r.height/r.width))};
+    const canMove=()=>{if(isDM)return true;if(MV().moveLock){toast('Движение заблокировано мастером');return false}if(!me())return false;if(myAct()){toast('Ход уже отправлен');return false}if(movedNow(uid)){toast('Перемещение в этом раунде уже потрачено');return false}return true};
+    const doMove=async(id,p)=>{const cur=(S.tokens.t||{})[id];
+      if(!isDM&&MV().grid>0&&cur){const d=dist(cur,p),max=MV().speed||6;if(d>max+.01){toast('Слишком далеко: '+d.toFixed(1)+' из '+max+' клеток');render();return}}
+      await db.doc('tokens/'+id).set(isDM?{...(cur||{}),...p}:{...p,...(cur?{mr:round()}:{})})};
+    let dragging=false;mb.style.cursor='crosshair';
+    mb.onclick=async e=>{if(dragging)return;const id=isDM?v('m_hero'):uid;if(!id||!canMove())return;await doMove(id,P(e))};
+    const tk=!isDM&&mb.querySelector('.tok[data-id="'+uid+'"]');
+    if(tk){tk.style.cursor='grab';tk.style.touchAction='none';
+      tk.onpointerdown=e=>{if(!canMove())return;dragging=true;tk._p=null;tk.setPointerCapture(e.pointerId)};
+      tk.onpointermove=e=>{if(!dragging)return;const p=P(e);tk.style.left=p.x+'%';tk.style.top=p.y+'%';tk._p=p;const cur=(S.tokens.t||{})[uid];if(MV().grid>0&&cur)toast(dist(cur,p).toFixed(1)+' / '+(MV().speed||6)+' кл.')};
+      tk.onpointerup=async()=>{if(!dragging)return;const p=tk._p;setTimeout(()=>dragging=false,80);if(p)await doMove(uid,p)}}
+  });
   const mf=document.getElementById('mapf');if(mf)mf.onchange=()=>{if(mf.files[0])shrink(mf.files[0],1000,u=>db.doc('game/map').set({img:u}))};
   const ns=document.getElementById('savenote');if(ns)ns.onclick=async()=>{await db.doc('notes/'+uid).set({text:v('notes')});ns.textContent='Сохранено'};
-  const sy=document.getElementById('sys');if(sy)sy.onchange=async()=>{await db.doc('game/settings').set({system:sy.value})};
+  const sy=document.getElementById('sys');if(sy)sy.onchange=async()=>{await db.doc('game/settings').set({...S.settings,system:sy.value})};
   const f=document.getElementById('img');
   if(f)f.onchange=()=>{const file=f.files[0];if(!file)return;shrink(file,400,u=>{pendingImg=u;document.getElementById('prev').src=u},.92,120000,true)};
 }
 function pfFields(c){const p=c.pf||{};const f=(id,l,v)=>`<div style="width:76px"><label>${l}</label><input type="number" id="${id}" value="${v||0}"></div>`;
   return `<div class="row" style="margin-top:8px">${f('c_ac','КБ',p.ac||10)}${f('c_fo','Стойк.',p.fo)}${f('c_re','Реакц.',p.re)}${f('c_wi','Воля',p.wi)}${f('c_pe','Воспр.',p.pe)}${f('c_hr','Очки героя',p.hr===undefined?1:p.hr)}</div><label>Состояния</label><input id="c_cond" value="${esc(p.cond)}" placeholder="Испуган 1, Ослаблен 2…">`}
-const pfActs=()=>`<label>Три действия за ход</label>${[1,2,3].map(i=>`<input id="a${i}" placeholder="◆ Действие ${i}">`).join('')}<input id="a_r" placeholder="↩ Реакция (необязательно)"><input id="act_roll" readonly placeholder="Проверка d20 — введите бонус и бросьте">`;
-const pfText=()=>[1,2,3].map(i=>v('a'+i)?'◆ '+v('a'+i):'').concat([v('a_r')?'↩ '+v('a_r'):'',v('act_roll')?'🎲 '+v('act_roll'):'']).filter(Boolean).join('\n');
+const pfActs=()=>`<label>Три действия за ход</label>${[1,2,3].map(i=>i===1&&movedNow(uid)?'<input readonly value="◆ Перемещение — фишка на карте">':`<input id="a${i}" placeholder="◆ Действие ${i}">`).join('')}<input id="a_r" placeholder="↩ Реакция (необязательно)"><input id="act_roll" readonly placeholder="Проверка d20 — введите бонус и бросьте">`;
+const pfText=()=>[1,2,3].map(i=>i===1&&movedNow(uid)?'◆ Перемещение':(v('a'+i)?'◆ '+v('a'+i):'')).concat([v('a_r')?'↩ '+v('a_r'):'',v('act_roll')?'🎲 '+v('act_roll'):'']).filter(Boolean).join('\n');
 function pfChips(c){if(!PF())return '';const p=c.pf||{},g=n=>(n>0?'+':'')+(n||0),ch=t=>`<span class="chip">${t}</span>`;
   return `<div style="margin-top:6px">${ch(ico('shield',14)+' КБ '+esc(p.ac||10))}${ch('Стойк. '+g(p.fo))}${ch('Реакц. '+g(p.re))}${ch('Воля '+g(p.wi))}${ch('Воспр. '+g(p.pe))}${ch(ico('star',14)+' '+esc(p.hr===undefined?1:p.hr))}${p.cond?ch(esc(p.cond)):''}</div>`}
 const sysCard=()=>`<div class="card"><h3>${ico('scroll',18)} Система</h3><select id="sys"><option value="dnd5e" ${PF()?'':'selected'}>D&amp;D 5e</option><option value="pf2e" ${PF()?'selected':''}>Pathfinder 2e</option></select><div class="mut">Меняет лист героя, форму хода и уровни (в PF2e — 1000 XP за уровень).</div></div>`;
+const stage=inner=>{const m=S.map&&S.map.img,tk=S.tokens.t||{};
+  return `<div class="stage">${m?`<div class="mapbox"><img src="${esc(m)}" alt="">${MV().grid>0?'<div class="gl" data-g="'+MV().grid+'"></div>':''}${S.chars.filter(c=>tk[c.id]).map(c=>`<div class="tok" data-id="${c.id}" title="${esc(c.name)}" style="left:${+tk[c.id].x}%;top:${+tk[c.id].y}%">${av(c)}</div>`).join('')}</div>`:`<div class="nomap">${ico('map',28)}<div>Мастер ещё не загрузил карту</div></div>`}<div class="ov">${inner}</div></div>`};
+const MV=()=>S.settings||{};
+const movedNow=id=>((S.tokens.t||{})[id]||{}).mr===round();
+function toast(t){let e=document.getElementById('toast');if(!e){e=document.createElement('div');e.id='toast';document.body.appendChild(e)}e.textContent=t;e.className='show';clearTimeout(e._t);e._t=setTimeout(()=>e.className='',2600)}
 const av=c=>c.img&&c.img.startsWith('data:image/')?`<img class="ava" alt="" src="${esc(c.img)}">`:`<div class="ava ph">${ico(CI[c.cls]||'user',34)}</div>`;
 const avatar=av;
 function xpBar(c){const x=c.xp||0,T=PF()?Array.from({length:20},(_,i)=>i*1000):XPT,l=PF()?Math.min(20,1+Math.floor(x/1000)):lvl(x),n=T[l],p=n?Math.round((x-T[l-1])/(n-T[l-1])*100):100;return '<div class="mut" style="margin-top:10px">'+ico('star',14)+' Уровень '+l+' · '+x+(n?' / '+n:'')+' XP</div><div class="bar"><i style="width:'+p+'%"></i></div>'}
@@ -253,7 +293,9 @@ function diceXp(){
 function vMap(){
   const m=S.map&&S.map.img,tk=S.tokens.t||{};
   let h='<div class="card"><h3>'+ico('map',18)+' Карта</h3>';
-  h+=m?`<div id="mapbox" class="mapbox" style="${isDM?'cursor:crosshair':''}"><img src="${esc(m)}" alt="">${S.chars.filter(c=>tk[c.id]).map(c=>`<div class="tok" title="${esc(c.name)}" style="left:${+tk[c.id].x}%;top:${+tk[c.id].y}%">${av(c)}</div>`).join('')}</div>`:'<div class="mut">Мастер ещё не загрузил карту.</div>';
+  h+=m?`<div id="mapbox" class="mapbox" style="${isDM?'cursor:crosshair':''}"><img src="${esc(m)}" alt="">${MV().grid>0?'<div class="gl" data-g="'+MV().grid+'"></div>':''}${S.chars.filter(c=>tk[c.id]).map(c=>`<div class="tok" data-id="${c.id}" title="${esc(c.name)}" style="left:${+tk[c.id].x}%;top:${+tk[c.id].y}%">${av(c)}</div>`).join('')}</div>`:'<div class="mut">Мастер ещё не загрузил карту.</div>';
+  if(!isDM&&m)h+='<div class="mut">Коснитесь карты или перетащите свою фишку — она встанет на новое место.</div>';
+  if(isDM)h+=`<label>Движение игроков</label><label style="display:flex;gap:8px;align-items:center;text-transform:none;margin:4px 0 8px"><input type="checkbox" id="mv_lock" style="width:auto;margin:0" ${MV().moveLock?'checked':''}> Заблокировать движение (бой, сцена)</label><div class="row"><div style="width:130px"><label>Клеток в ширину</label><input id="mv_grid" type="number" min="0" value="${MV().grid||0}"></div><div style="width:130px"><label>Скорость, клеток</label><input id="mv_sp" type="number" min="1" value="${MV().speed||(PF()?5:6)}"></div><button id="mv_save">${ico('check',18)} Сохранить</button></div><div class="mut" style="margin-bottom:8px">0 клеток — без сетки и без лимита дальности.</div>`;
   if(isDM)h+=`<label>Загрузить карту</label><input type="file" id="mapf" accept="image/*"><label>Фишка героя</label><select id="m_hero">${S.chars.map(c=>`<option value="${c.id}">${esc(c.name)}</option>`).join('')}</select><div class="mut">Выберите героя и коснитесь карты — фишка встанет на это место.</div>`;
   return h+'</div>'}
 function vNotes(){return `<div class="card"><h3>${ico('note',18)} Заметки мастера</h3><div class="mut">Видны только вам</div><textarea id="notes" style="min-height:280px">${esc(drafts.notes||'')}</textarea><button class="pri" id="savenote">${ico('check',18)} Сохранить</button></div>`}
@@ -386,7 +428,9 @@ async function startGame(lb){
   const sub=(p,f)=>db.collection(p).onSnapshot(x=>{f(mapDocs(x));render()});
   db.doc('game/state').onSnapshot(x=>{S.game=x.exists?x.data():{round:1};render()});
   db.doc('game/map').onSnapshot(x=>{S.map=x.exists?x.data():{};render()});
-  db.doc('game/tokens').onSnapshot(x=>{S.tokens=x.exists?x.data():{};render()});
+  const mt=()=>{S.tokens={t:{...S.tk0,...S.tk1}}};
+  db.doc('game/tokens').onSnapshot(x=>{S.tk0=x.exists?x.data().t||{}:{};mt();render()});
+  db.collection('tokens').onSnapshot(x=>{S.tk1=Object.fromEntries(mapDocs(x).map(d=>[d.id,{x:d.x,y:d.y,mr:d.mr}]));mt();render()});
   db.doc('game/settings').onSnapshot(x=>{S.settings=x.exists?x.data():{};render()});sub('rolls',x=>S.rolls=x);sub('story',x=>S.story=x);sub('items',x=>S.items=x);sub('characters',x=>S.chars=x);sub('actions',x=>S.acts=x);
   document.body.classList.remove('out');render();
 }
