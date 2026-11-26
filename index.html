@@ -58,8 +58,8 @@ label{font-size:.78rem;color:var(--mut);margin-left:4px;font-weight:800;text-tra
 .cls button.on{background:var(--acc);color:var(--pri-ink)}
 .bar{height:12px;background:var(--card);border:2px solid var(--ink);border-radius:99px;overflow:hidden;margin:6px 0}.bar i{display:block;height:100%;background:var(--acc)}
 .mapbox{position:relative;border:3px solid var(--ink);border-radius:18px;overflow:hidden;line-height:0;margin-bottom:10px}.mapbox img{width:100%;display:block}
-.tok{position:absolute;transform:translate(-50%,-50%);width:40px;height:40px;border-radius:50%;border:3px solid var(--ink);background:var(--card);overflow:hidden}
-.tok .ava{width:100%;height:100%;border:0}
+.tok{position:absolute;transform:translate(-50%,-50%);width:40px;height:40px;border-radius:8px;box-shadow:2px 2px 0 var(--ink);border:3px solid var(--ink);background:var(--card);overflow:hidden}
+.tok .ava{width:100%;height:100%;border:0;border-radius:0}
 body.out header,body.out nav,body.out main{display:none}body:not(.out) #gate{display:none}
 .gate{max-width:560px;margin:0 auto;padding:24px 16px 60px}
 .gate.center{display:flex;align-items:center;justify-content:center;min-height:85vh;max-width:none}
@@ -88,6 +88,18 @@ a{color:var(--acc);font-weight:800}
 .gl{position:absolute;inset:0;pointer-events:none;background-image:linear-gradient(rgba(255,255,255,.3) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.3) 1px,transparent 1px)}
 #toast{position:fixed;left:50%;top:calc(16px + env(safe-area-inset-top,0px));transform:translate(-50%,-20px);background:var(--ink);color:var(--card);padding:10px 18px;border-radius:14px;border:3px solid var(--acc);z-index:50;opacity:0;pointer-events:none;transition:.2s;max-width:90vw;text-align:center;font-weight:800}
 #toast.show{opacity:1;transform:translate(-50%,0)}
+.ipic{width:64px;height:64px;border-radius:16px;object-fit:contain;background:var(--soft);border:3px solid var(--ink);flex:0 0 auto;padding:4px}
+.ipic.big{width:96px;height:96px}
+.ipic.ph{display:flex;align-items:center;justify-content:center;font-size:1.8rem;color:var(--acc)}
+.ipic.empty{flex-direction:column;gap:2px;border-style:dashed;background:var(--tint);color:var(--acc);font-size:.7rem;font-weight:800}
+.pick{display:block;margin:0;cursor:pointer;transition:transform .12s}.pick:hover{transform:rotate(-3deg) scale(1.04)}
+.libg{display:grid;grid-template-columns:repeat(auto-fill,minmax(72px,1fr));gap:8px}
+.lib{position:relative;aspect-ratio:1;border:3px solid var(--ink);border-radius:16px;background:var(--soft);overflow:hidden;cursor:pointer;display:flex;align-items:center;justify-content:center;margin:0}
+.lib img{width:100%;height:100%;object-fit:contain;padding:4px}
+.lib.sel{border-color:var(--acc);box-shadow:0 0 0 3px var(--acc)}
+.lib .x{position:absolute;top:2px;right:2px;padding:2px 5px;border-radius:8px;border-width:2px;box-shadow:none}
+.lib.add{border-style:dashed;color:var(--acc)}
+.ci{width:16px;height:16px;object-fit:contain}
 </style>
 </head>
 <body class="out">
@@ -208,13 +220,23 @@ function card(c){
   return `<div class="card"><div class="row" style="flex-wrap:nowrap">${avatar(c)}<div><h3 style="margin:0">${esc(c.name)}</h3><div class="mut">${esc(c.race)} · ${ico(CI[c.cls]||'user',14)} ${esc(c.cls)} · ${ico("heart",14)} ${esc(c.hp)}</div></div></div>${xpBar(c)}${pfChips(c)}
   <div class="stats" style="margin:8px 0">${STATS.map((n,i)=>`<div><span class="mut">${n}</span><br><b>${esc(PF()&&(c.stats||[])[i]>0?'+'+(c.stats||[])[i]:(c.stats||[])[i])}</b></div>`).join('')}</div>
   ${c.bio?`<div class="txt mut">${esc(c.bio)}</div>`:''}
-  <div>${(c.inv||[]).map((x,i)=>`<span class="chip">${ico("bag",14)} ${esc(x)}</span>`).join('')||'<span class="mut">Инвентарь пуст</span>'}</div></div>`;
+  <div>${(c.inv||[]).map((x,i)=>`<span class="chip">${invIco(x)} ${esc(x)}</span>`).join('')||'<span class="mut">Инвентарь пуст</span>'}</div></div>`;
 }
 function vParty(){return S.chars.length?`<div class="grid">${S.chars.map(card).join('')}</div>`:'<div class="card mut">Героев ещё нет.</div>'}
+function itemPic(i){return i.img&&i.img.startsWith('data:image/')?`<img class="ipic" src="${esc(i.img)}" alt="">`:`<div class="ipic ph">${i.icon?esc(i.icon):ico('bag',30)}</div>`}
 function vItems(){
   let h='';
-  if(isDM)h+=`<div class="card"><h3>Новый предмет</h3><div class="row"><input id="i_icon" placeholder="🗡️" style="width:70px"><input id="i_name" placeholder="Название" style="flex:1"></div><textarea id="i_desc" placeholder="Описание и свойства"></textarea><button class="pri" id="addi">${ico("plus",18)} Создать предмет</button></div>`;
-  h+=S.items.length?`<div class="grid">${S.items.map(i=>`<div class="card"><h3>${esc(i.icon||'📦')} ${esc(i.name)}</h3><div class="txt">${esc(i.desc)}</div>
+  if(isDM){
+    const lib=[...(S.lib||[])].sort((a,b)=>b.ts-a.ts);
+    h+=`<div class="card"><h3>Новый предмет</h3><div class="row" style="flex-wrap:nowrap;align-items:flex-start">
+    <label class="pick" title="Нажмите, чтобы загрузить картинку">${itemImg?`<img class="ipic big" src="${esc(itemImg)}" alt="">`:`<div class="ipic big ph empty">${ico('plus',24)}<span>PNG</span></div>`}<input type="file" id="i_file" accept="image/*" hidden></label>
+    <div style="flex:1;min-width:0"><input id="i_name" placeholder="Название"><textarea id="i_desc" placeholder="Описание и свойства" style="min-height:70px"></textarea></div></div>
+    <label style="display:flex;gap:8px;align-items:center;text-transform:none;margin:0 0 8px"><input type="checkbox" id="i_save" style="width:auto;margin:0" ${saveLib?'checked':''}> Сохранить картинку в библиотеку</label>
+    <div class="row"><button class="pri" id="addi">${ico("plus",18)} Создать предмет</button>${itemImg?'<button id="i_clear">Убрать картинку</button>':''}</div></div>
+    <div class="card"><h3>${ico('bag',18)} Библиотека картинок</h3><div class="mut" style="margin-bottom:10px">Загрузите PNG один раз — потом выбирайте их для любых предметов. Нажмите на картинку, чтобы выбрать.</div>
+    <div class="libg">${lib.map(l=>`<div class="lib ${itemImg===l.img?'sel':''}"><img src="${esc(l.img)}" alt="" data-lib="${l.id}"><button class="x" data-dlib="${l.id}" title="Удалить">${ico('trash',14)}</button></div>`).join('')}<label class="lib add" title="Загрузить в библиотеку">${ico('plus',26)}<input type="file" id="lib_file" accept="image/*" multiple hidden></label></div></div>`;
+  }
+  h+=S.items.length?`<div class="grid">${S.items.map(i=>`<div class="card"><div class="row" style="flex-wrap:nowrap;align-items:flex-start;margin-bottom:8px">${isDM?`<label class="pick" title="Сменить картинку">${itemPic(i)}<input type="file" data-itemfile="${i.id}" accept="image/*" hidden></label>`:itemPic(i)}<div style="min-width:0"><h3 style="margin:0">${esc(i.name)}</h3><div class="txt">${esc(i.desc)}</div></div></div>
   ${isDM?`<div class="row"><select id="gv_${i.id}" style="flex:1">${S.chars.map(c=>`<option value="${c.id}">${esc(c.name)}</option>`).join('')}</select><button data-give="${i.id}">${ico("gift",18)} Выдать</button><button data-deli="${i.id}">${ico("trash",18)}</button></div>`:''}</div>`).join('')}</div>`:'<div class="card mut">Предметов пока нет.</div>';
   return h;
 }
@@ -225,7 +247,7 @@ function bind(){
     await db.doc('actions/'+round()+'_'+uid).set({round:round(),uid,name:me().name,text:t,reply:'',ts:Date.now()});['act_t','a1','a2','a3','a_r','act_roll'].forEach(clr)});
   B('next',async()=>{await db.doc('game/state').set({round:round()+1})});
   B('post',async()=>{const t=v('st_text');if(!t)return;await db.collection('story').add({title:v('st_title'),text:t,round:round(),ts:Date.now()});clr('st_text');clr('st_title');tab='story';render()});
-  B('addi',async()=>{if(!v('i_name'))return;await db.collection('items').add({name:v('i_name'),desc:v('i_desc'),icon:v('i_icon'),ts:Date.now()});['i_name','i_desc','i_icon'].forEach(clr)});
+  B('addi',async()=>{if(!v('i_name'))return;const inLib=(S.lib||[]).some(l=>l.img===itemImg);if(itemImg&&saveLib&&!inLib)await db.collection('lib').add({img:itemImg,ts:Date.now()});await db.collection('items').add({name:v('i_name'),desc:v('i_desc'),img:itemImg||'',ts:Date.now()});['i_name','i_desc'].forEach(clr);itemImg=null;render()});
   B('rs',()=>{for(let i=0;i<6;i++){const d=[0,0,0,0].map(()=>1+Math.floor(Math.random()*6)).sort();const val=d[1]+d[2]+d[3];document.getElementById('c_s'+i).value=val;drafts['c_s'+i]=String(val)}});
   B('savec',async()=>{
     const name=v('c_name');if(!name){alert('Введите имя героя');return}
@@ -264,6 +286,13 @@ function bind(){
   const mf=document.getElementById('mapf');if(mf)mf.onchange=()=>{if(mf.files[0])shrink(mf.files[0],1000,u=>db.doc('game/map').set({img:u}))};
   const ns=document.getElementById('savenote');if(ns)ns.onclick=async()=>{await db.doc('notes/'+uid).set({text:v('notes')});ns.textContent='Сохранено'};
   const sy=document.getElementById('sys');if(sy)sy.onchange=async()=>{await db.doc('game/settings').set({...S.settings,system:sy.value})};
+  const itf=document.getElementById('i_file');if(itf)itf.onchange=()=>{const f=itf.files[0];if(f)shrinkPng(f,256,u=>{itemImg=u;render()})};
+  const sl=document.getElementById('i_save');if(sl)sl.onchange=()=>{saveLib=sl.checked};
+  B('i_clear',()=>{itemImg=null;render()});
+  const lf=document.getElementById('lib_file');if(lf)lf.onchange=async()=>{for(const f of lf.files)await new Promise(r=>shrinkPng(f,256,async u=>{await db.collection('lib').add({img:u,ts:Date.now()});r()}))};
+  document.querySelectorAll('[data-lib]').forEach(e=>e.onclick=()=>{const l=(S.lib||[]).find(x=>x.id===e.dataset.lib);if(l){itemImg=l.img;render()}});
+  document.querySelectorAll('[data-dlib]').forEach(b=>b.onclick=async()=>{if(confirm('Удалить картинку из библиотеки?'))await db.doc('lib/'+b.dataset.dlib).delete()});
+  document.querySelectorAll('[data-itemfile]').forEach(inp=>inp.onchange=()=>{const f=inp.files[0];if(f)shrinkPng(f,256,u=>db.doc('items/'+inp.dataset.itemfile).update({img:u}))});
   const f=document.getElementById('img');
   if(f)f.onchange=()=>{const file=f.files[0];if(!file)return;shrink(file,400,u=>{pendingImg=u;document.getElementById('prev').src=u},.92,120000,true)};
 }
@@ -279,6 +308,9 @@ const stage=inner=>{const m=S.map&&S.map.img,tk=S.tokens.t||{};
 const MV=()=>S.settings||{};
 const movedNow=id=>((S.tokens.t||{})[id]||{}).mr===round();
 function toast(t){let e=document.getElementById('toast');if(!e){e=document.createElement('div');e.id='toast';document.body.appendChild(e)}e.textContent=t;e.className='show';clearTimeout(e._t);e._t=setTimeout(()=>e.className='',2600)}
+let itemImg=null,saveLib=true;
+function shrinkPng(file,max,cb){const im=new Image();im.onload=()=>{let k=Math.min(1,max/Math.max(im.width,im.height)),u;const cv=document.createElement('canvas'),x=cv.getContext('2d');for(let i=0;i<6;i++){cv.width=Math.max(1,Math.round(im.width*k));cv.height=Math.max(1,Math.round(im.height*k));x.clearRect(0,0,cv.width,cv.height);x.imageSmoothingEnabled=true;x.imageSmoothingQuality='high';x.drawImage(im,0,0,cv.width,cv.height);u=cv.toDataURL('image/png');if(u.length>150000){const w=cv.toDataURL('image/webp',.85);if(w.startsWith('data:image/webp'))u=w}if(u.length<150000)break;k*=.8}cb(u)};im.src=URL.createObjectURL(file)}
+const invIco=n=>{const it=S.items.find(i=>i.name===n);return it&&it.img&&it.img.startsWith('data:image/')?`<img class="ci" src="${esc(it.img)}" alt="">`:ico('bag',14)};
 const av=c=>c.img&&c.img.startsWith('data:image/')?`<img class="ava" alt="" src="${esc(c.img)}">`:`<div class="ava ph">${ico(CI[c.cls]||'user',34)}</div>`;
 const avatar=av;
 function xpBar(c){const x=c.xp||0,T=PF()?Array.from({length:20},(_,i)=>i*1000):XPT,l=PF()?Math.min(20,1+Math.floor(x/1000)):lvl(x),n=T[l],p=n?Math.round((x-T[l-1])/(n-T[l-1])*100):100;return '<div class="mut" style="margin-top:10px">'+ico('star',14)+' Уровень '+l+' · '+x+(n?' / '+n:'')+' XP</div><div class="bar"><i style="width:'+p+'%"></i></div>'}
@@ -431,7 +463,7 @@ async function startGame(lb){
   const mt=()=>{S.tokens={t:{...S.tk0,...S.tk1}}};
   db.doc('game/tokens').onSnapshot(x=>{S.tk0=x.exists?x.data().t||{}:{};mt();render()});
   db.collection('tokens').onSnapshot(x=>{S.tk1=Object.fromEntries(mapDocs(x).map(d=>[d.id,{x:d.x,y:d.y,mr:d.mr}]));mt();render()});
-  db.doc('game/settings').onSnapshot(x=>{S.settings=x.exists?x.data():{};render()});sub('rolls',x=>S.rolls=x);sub('story',x=>S.story=x);sub('items',x=>S.items=x);sub('characters',x=>S.chars=x);sub('actions',x=>S.acts=x);
+  db.doc('game/settings').onSnapshot(x=>{S.settings=x.exists?x.data():{};render()});sub('rolls',x=>S.rolls=x);sub('story',x=>S.story=x);sub('items',x=>S.items=x);sub('lib',x=>S.lib=x);sub('characters',x=>S.chars=x);sub('actions',x=>S.acts=x);
   document.body.classList.remove('out');render();
 }
 document.getElementById('out').onclick=()=>showLobbies();
