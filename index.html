@@ -120,6 +120,8 @@ a{color:var(--acc);font-weight:800}
 @keyframes dpop{from{transform:translateX(-50%) scale(0)}to{transform:translateX(-50%) scale(1)}}
 .stage.short{min-height:240px}
 .snd{position:absolute;top:10px;right:10px;padding:6px 8px;z-index:6}
+#d3r{position:fixed;left:50%;bottom:calc(112px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);z-index:46;background:var(--acc);color:var(--pri-ink);border:3px solid var(--ink);border-radius:14px;padding:6px 16px;font:900 1.3rem Fraunces,Georgia,serif;box-shadow:var(--sh);opacity:0;transition:opacity .25s;pointer-events:none;white-space:nowrap;max-width:94vw;overflow:hidden;text-overflow:ellipsis}
+#d3r.show{opacity:1}
 </style>
 </head>
 <body class="out">
@@ -130,6 +132,7 @@ a{color:var(--acc);font-weight:800}
 <div id="gate" class="gate"></div>
 <main id="app"><div class="card">Загрузка…</div></main>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.150.1/build/three.min.js"></script>
 <script>
 /* === НАСТРОЙКА: вставьте данные своего проекта Supabase (Project Settings → API) === */
 const SUPABASE_URL='https://hpwevgvytnjrtrjetkmc.supabase.co';
@@ -359,7 +362,93 @@ const PIPS={1:[5],2:[1,9],3:[1,5,9],4:[1,3,7,9],5:[1,3,5,7,9],6:[1,3,4,6,7,9]},R
 const cube=v=>`<div class="scene"><div class="cube" style="--rx:${ROT[v][0]}deg;--ry:${ROT[v][1]}deg">${[1,2,3,4,5,6].map(f=>`<div class="face f${f}">${[1,2,3,4,5,6,7,8,9].map(c=>`<i class="${PIPS[f].includes(c)?'p':''}"></i>`).join('')}</div>`).join('')}</div></div>`;
 function diceHTML(compact){if(!dice)return '';const el=Date.now()-dice.start,vals=(dice.vals||[]).slice(0,6);
   return `<div class="dlayer ${compact?'compact':''}" style="--d:${-el}ms">${vals.map((v,i)=>`<div class="dthrow" style="--i:${i}">${dice.die===6?cube(v):`<div class="dshape">${dieSVG(dice.die,v,92)}</div>`}</div>`).join('')}${compact?'':`<div class="dres">${esc(dice.txt||'')} → ${esc(dice.total)}</div>`}</div>`}
-function startDice(r){const st=Date.now();dice={...r,start:st};playDice();setTimeout(()=>{if(dice&&dice.start===st){dice=null;render()}},6500);render()}
+/* ===== 3D-кубики (three.js) ===== */
+let D3=null;
+const D3L={4:['1','2','3','4'],6:['3','4','1','6','2','5'],8:['1','2','3','4','5','6','7','8'],10:['1','2','3','4','5','6','7','8','9','10'],12:['1','2','3','4','5','6','7','8','9','10','11','12'],20:Array.from({length:20},(_,i)=>String(i+1))};
+const D3C={4:0xf2b134,6:0xfffaf0,8:0x4fd1c5,10:0xa07cff,12:0xe8453c,20:0x5a8bf0};
+const TENS=['00','10','20','30','40','50','60','70','80','90'],UNITS=['0','1','2','3','4','5','6','7','8','9'];
+function d3init(){
+  if(D3)return D3;
+  const cv=document.createElement('canvas');cv.id='d3c';
+  cv.style.cssText='position:fixed;inset:0;width:100%;height:100%;pointer-events:none;z-index:45;filter:drop-shadow(0 8px 6px rgba(0,0,0,.45));transition:opacity .6s';
+  const rs=document.createElement('div');rs.id='d3r';document.body.append(cv,rs);
+  const r=new THREE.WebGLRenderer({canvas:cv,alpha:true,antialias:true});r.setPixelRatio(Math.min(2,window.devicePixelRatio||1));
+  const sc=new THREE.Scene(),cam=new THREE.PerspectiveCamera(35,1,.1,100);cam.position.set(0,0,14);
+  sc.add(new THREE.AmbientLight(0xffffff,.8));const dl=new THREE.DirectionalLight(0xffffff,.85);dl.position.set(-4,6,10);sc.add(dl);
+  D3={cv,rs,r,sc,cam,items:[],raf:0,tm:[]};
+  const fit=()=>{r.setSize(innerWidth,innerHeight,false);cam.aspect=innerWidth/innerHeight;cam.updateProjectionMatrix()};fit();addEventListener('resize',fit);
+  return D3}
+function d3geo(k){
+  if(k===6)return new THREE.BoxGeometry(1.5,1.5,1.5).toNonIndexed();
+  if(k===4)return new THREE.TetrahedronGeometry(1.2);
+  if(k===8)return new THREE.OctahedronGeometry(1.1);
+  if(k===12)return new THREE.DodecahedronGeometry(1.05);
+  if(k===20)return new THREE.IcosahedronGeometry(1.1);
+  const a=.1,U=[],L=[],V=THREE.Vector3;
+  for(let i=0;i<5;i++){const t=i*2*Math.PI/5,u=t+Math.PI/5;U.push(new V(Math.cos(t),a,Math.sin(t)));L.push(new V(Math.cos(u),-a,Math.sin(u)))}
+  const p0=U[0],n=new V().subVectors(U[1],p0).cross(new V().subVectors(L[0],p0)),h=p0.y+(n.x*p0.x+n.z*p0.z)/n.y;
+  const T=new V(0,h,0),B=new V(0,-h,0),P=[];
+  for(let i=0;i<5;i++){const j=(i+1)%5;P.push(T,U[i],L[i],T,L[i],U[j],B,L[i],U[j],B,U[j],L[j])}
+  const g=new THREE.BufferGeometry().setFromPoints(P);g.scale(1.1,1.1,1.1);return g}
+function d3faces(geo){
+  const pos=geo.attributes.position,G=new Map(),V=i=>new THREE.Vector3().fromBufferAttribute(pos,i);
+  for(let i=0;i<pos.count;i+=3){
+    const a=V(i),b=V(i+1),c=V(i+2),n=new THREE.Vector3().subVectors(b,a).cross(new THREE.Vector3().subVectors(c,a)).normalize(),ct=a.clone().add(b).add(c).divideScalar(3);
+    if(n.dot(ct)<0)n.negate();
+    const key=n.toArray().map(x=>Math.round(x*40)).join(',');
+    if(!G.has(key))G.set(key,{n:n.clone(),pts:new Map()});
+    const o=G.get(key);[a,b,c].forEach(p=>o.pts.set(p.toArray().map(x=>x.toFixed(3)).join(','),p))}
+  return[...G.values()].map(o=>{
+    const pts=[...o.pts.values()],c=pts.reduce((s,p)=>s.add(p),new THREE.Vector3()).divideScalar(pts.length),n=o.n;
+    const md=pts.reduce((s,p)=>s+p.distanceTo(c),0)/pts.length;
+    const up=pts[0].clone().sub(c);up.addScaledVector(n,-up.dot(n)).normalize();
+    return{c,n,up,size:md*({3:.85,4:1.0,5:1.3}[pts.length]||1)}})}
+function d3tex(text,pips){
+  const c=document.createElement('canvas');c.width=c.height=128;const x=c.getContext('2d');
+  if(pips){const P={1:[[64,64]],2:[[32,32],[96,96]],3:[[32,32],[64,64],[96,96]],4:[[32,32],[96,32],[32,96],[96,96]],5:[[32,32],[96,32],[64,64],[32,96],[96,96]],6:[[32,28],[96,28],[32,64],[96,64],[32,100],[96,100]]};
+    x.fillStyle=pips===1?'#e8453c':'#2b2140';P[pips].forEach(([a,b])=>{x.beginPath();x.arc(a,b,12,0,7);x.fill()})}
+  else{x.font='900 '+(text.length>2?44:text.length>1?62:84)+'px Fraunces,Georgia,serif';x.textAlign='center';x.textBaseline='middle';x.lineWidth=12;x.lineJoin='round';x.strokeStyle='#2b2140';x.strokeText(text,64,68);x.fillStyle='#fff';x.fillText(text,64,68)}
+  const t=new THREE.CanvasTexture(c);t.anisotropy=4;return t}
+function d3die(k,labels,color){
+  const geo=d3geo(k),grp=new THREE.Group();
+  grp.add(new THREE.Mesh(geo,new THREE.MeshStandardMaterial({color,flatShading:true,roughness:.35,metalness:.05,side:THREE.DoubleSide})));
+  grp.add(new THREE.LineSegments(new THREE.EdgesGeometry(geo,1),new THREE.LineBasicMaterial({color:0x2b2140})));
+  const Q={};
+  d3faces(geo).forEach((f,i)=>{
+    const lab=labels[i%labels.length],m=new THREE.Mesh(new THREE.PlaneGeometry(f.size,f.size),new THREE.MeshBasicMaterial({map:d3tex(lab,k===6?+lab:0),transparent:true,depthWrite:false,polygonOffset:true,polygonOffsetFactor:-2}));
+    const x=new THREE.Vector3().crossVectors(f.up,f.n).normalize(),M=new THREE.Matrix4().makeBasis(x,f.up,f.n);
+    m.quaternion.setFromRotationMatrix(M);m.position.copy(f.c).addScaledVector(f.n,.008);grp.add(m);
+    Q[lab]=new THREE.Quaternion().setFromRotationMatrix(M).invert()});
+  return{g:grp,Q}}
+function roll3d(r){
+  const D=d3init();cancelAnimationFrame(D.raf);D.tm.forEach(clearTimeout);D.tm=[];
+  D.items.forEach(o=>{D.sc.remove(o.g);o.g.traverse(m=>{if(m.geometry)m.geometry.dispose();if(m.material){if(m.material.map)m.material.map.dispose();m.material.dispose()}})});D.items=[];
+  D.rs.classList.remove('show');D.cv.style.opacity=1;
+  const specs=[];
+  (r.vals||[]).slice(0,6).forEach(v=>{
+    if(r.die===100){const t=v===100?0:Math.floor(v/10)*10;specs.push({k:10,l:TENS,v:t===0?'00':String(t),c:0xff7ab8},{k:10,l:UNITS,v:String(v%10),c:0xffa6d3})}
+    else specs.push({k:r.die,l:D3L[r.die]||D3L[20],v:String(v),c:D3C[r.die]||D3C[20]})});
+  const visH=2*14*Math.tan(17.5*Math.PI/180),visW=visH*(innerWidth/innerHeight),SF=(()=>{let f=1,g=2.3,p=Math.max(1,Math.floor(visW/g));if(Math.ceil(specs.length/p)>2){f=.62;g=2.3*f;p=Math.max(1,Math.floor(visW/g))}return{f,g,p}})(),sf=SF.f,gap=SF.g,per=SF.p,rows=Math.ceil(specs.length/per);
+  specs.forEach((s,i)=>{
+    const d=d3die(s.k,s.l,s.c),row=Math.floor(i/per),cnt=Math.min(per,specs.length-row*per),col=i%per;
+    const to=new THREE.Vector3((col-(cnt-1)/2)*gap,((rows-1)/2-row)*gap+.6,0);
+    const o={g:d.g,tq:d.Q[s.v]||new THREE.Quaternion(),axis:new THREE.Vector3(Math.random()-.5,Math.random()-.5,Math.random()-.5).normalize(),spin:(6+Math.random()*3)*Math.PI,from:new THREE.Vector3(-visW/2-2,-visH/2-1.5,0),to,delay:i*.09};
+    D.sc.add(o.g);D.items.push(o)});
+  const T=1.9,t0=performance.now();
+  const step=now=>{
+    const el=(now-t0)/1000;
+    D.items.forEach(o=>{
+      const t=Math.min(1,Math.max(0,(el-o.delay)/T)),e=1-Math.pow(1-t,3),p=o.from.clone().lerp(o.to,1-Math.pow(1-t,2.2));
+      p.y+=2.2*Math.abs(Math.sin(t*Math.PI*2.6))*Math.pow(1-t,1.3);o.g.position.copy(p);
+      o.g.quaternion.setFromAxisAngle(o.axis,o.spin*(1-e)).multiply(o.tq);o.g.scale.setScalar(sf*(.35+.65*Math.min(1,t*4)))});
+    D.r.render(D.sc,D.cam);
+    if(el<T+.2+D.items.length*.09)D.raf=requestAnimationFrame(step)};
+  D.raf=requestAnimationFrame(step);
+  D.tm.push(setTimeout(()=>{D.rs.textContent=(r.txt||'')+' → '+r.total;D.rs.classList.add('show')},1700));
+  D.tm.push(setTimeout(()=>{D.cv.style.opacity=0;D.rs.classList.remove('show')},6000));
+  D.tm.push(setTimeout(()=>{D.items.forEach(o=>D.sc.remove(o.g));D.items=[];D.r.clear()},6700))}
+
+function startDice(r){if(window.THREE){try{playDice();roll3d(r);return}catch(e){console.error('3D',e)}}const st=Date.now();dice={...r,start:st};playDice();setTimeout(()=>{if(dice&&dice.start===st){dice=null;render()}},6500);render()}
 function onRolls(){const mx=Math.max(0,...S.rolls.map(r=>r.ts||0));if(rollSeen===null){rollSeen=mx;return}
   const nw=S.rolls.filter(r=>r.ts>rollSeen&&r.die).sort((a,b)=>a.ts-b.ts);rollSeen=Math.max(rollSeen,mx);const r=nw[nw.length-1];if(r)startDice({...r,txt:(r.who?r.who+' · ':'')+(r.txt||'')})}
 const av=c=>c.img&&c.img.startsWith('data:image/')?`<img class="ava" alt="" src="${esc(c.img)}">`:`<div class="ava ph">${ico(CI[c.cls]||'user',34)}</div>`;
